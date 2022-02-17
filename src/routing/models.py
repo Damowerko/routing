@@ -1,5 +1,5 @@
 import pytorch_lightning as pl
-from projectname.utils import auto_args
+from routing.utils import auto_args
 
 
 @auto_args

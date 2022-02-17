@@ -1,11 +1,11 @@
 [tool.poetry]
-name = "projectname"
+name = "routing"
 version = "0.1.0"
 description = ""
 authors = ["Damian Owerko <damowerko@gmail.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "projectname", from = "src"}]
+packages = [{include = "routing", from = "src"}]
 
 [[tool.poetry.source]]
 name = "pytorch"

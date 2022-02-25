@@ -11,6 +11,8 @@
               dir: scripts
           - include:
               dir: src
+      requires:
+        - data
   resources:
     data:
       - file: data/

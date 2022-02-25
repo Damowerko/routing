@@ -1,17 +1,25 @@
-import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 import argparse
 import os
+from torch_geometric.data import LightningDataset
+from torch.utils.data import random_split
 
-from routing.datasets import Dataset
-from routing.models import Model
+from routing.datasets import DijkstraDataset
+from routing.models import DeepGNN
 
 
 def train(params):
-    dataset = Dataset(**vars(params))
-    model = Model(**vars(params))
+    dataset = DijkstraDataset("data/", **vars(params))
+    datamodule = LightningDataset(
+        *random_split(dataset, [int(len(dataset) * frac) for frac in [0.8, 0.2]]),
+        batch_size=params.batch_size,
+        num_workers=params.num_workers,
+        shuffle=True
+    )
+
+    model = DeepGNN(**vars(params))
 
     logger = (
         TensorBoardLogger(save_dir="./", name="tensorboard", version="")
@@ -33,7 +41,7 @@ def train(params):
     trainer = pl.Trainer(
         logger=logger,
         callbacks=callbacks,
-        precision=32,
+        precision=64,
         gpus=params.gpus,
         max_epochs=params.max_epochs,
         default_root_dir=".",
@@ -43,7 +51,7 @@ def train(params):
     ckpt_path = "./checkpoints/last.ckpt"
     ckpt_path = ckpt_path if os.path.exists(ckpt_path) else None
 
-    trainer.fit(model, datamodule=dataset, ckpt_path=ckpt_path)
+    trainer.fit(model, datamodule, ckpt_path=ckpt_path)
 
 
 if __name__ == "__main__":
@@ -54,11 +62,13 @@ if __name__ == "__main__":
 
     # data arguments
     group = parser.add_argument_group("Data")
-    Dataset.add_args(group)
+    DijkstraDataset.add_args(group)
+    group.add_argument("--batch_size", type=int, default=32)
+    group.add_argument("--num_workers", type=int, default=0)
 
     # model arguments
     group = parser.add_argument_group("Model")
-    Model.add_args(group)
+    DeepGNN.add_args(group)
 
     # trainer arguments
     group = parser.add_argument_group("Trainer")

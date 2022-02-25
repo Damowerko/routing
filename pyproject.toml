@@ -12,14 +12,21 @@ name = "pytorch"
 url = "https://eternalphane.github.io/pytorch-pypi/"
 
 [tool.poetry.dependencies]
-python = "^3.9,<3.11"
-torch = "1.10.1+cu113"
-pytorch-lightning = "^1.5.9"
-numpy = "^1.22.1"
+python = ">=3.9,<3.10"
 pandas = "<1.2"
+numpy = "^1.22.1"
+scipy = "^1.8.0"
+networkx = "^2.6.3"
 matplotlib = "^3.5.1"
 PySide6 = "^6.2.2.1"
+torch = "1.10.1+cu113"
 torchinfo = "^1.6.3"
+pytorch-lightning = "^1.5.9"
+torch-scatter = {url = "https://data.pyg.org/whl/torch-1.10.0+cu113/torch_scatter-2.0.9-cp39-cp39-linux_x86_64.whl"}
+torch-sparse = {url = "https://data.pyg.org/whl/torch-1.10.0+cu113/torch_sparse-0.6.12-cp39-cp39-linux_x86_64.whl"}
+torch-cluster = {url = "https://data.pyg.org/whl/torch-1.10.0+cu113/torch_cluster-1.5.9-cp39-cp39-linux_x86_64.whl"}
+torch-spline-conv = {url = "https://data.pyg.org/whl/torch-1.10.0+cu113/torch_spline_conv-1.2.1-cp39-cp39-linux_x86_64.whl"}
+torch-geometric = "^2.0.3"
 
 [tool.poetry.group.dev.dependencies]
 black = "^21.12-beta.0"

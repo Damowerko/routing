@@ -1,4 +1,3 @@
-from idna import check_nfc
 import pytorch_lightning as pl
 from routing.utils import auto_args
 import torch
@@ -9,17 +8,30 @@ from torch_geometric.data import Data
 
 
 @auto_args
-class DeepGNN(pl.LightningModule):
+class MLPGNN(pl.LightningModule):
     def __init__(
         self,
         lr: float = 1e-3,
-        weight_decay: float = 0,
-        n_layers: int = 3,
+        weight_decay: float = 0.0,
+        n_mlp: int = 2,
+        n_gnn: int = 3,
         K: int = 4,
-        F: int = 32,
-        nonlinearity: str = "relu",
+        F: int = 256,
+        nonlinearity: str = "leaky_relu",
+        batch_norm: bool = True,
+        normalize: bool = True,
         **kwargs
     ):
+        self.lr = lr
+        self.weight_decay = weight_decay
+        self.n_mlp = n_mlp
+        self.n_gnn = n_gnn
+        self.K = K
+        self.F = F
+        self.nonlinearity = nonlinearity
+        self.batch_norm = batch_norm
+        self.normalize = normalize
+
         super().__init__()
         self.save_hyperparameters()
 
@@ -28,26 +40,46 @@ class DeepGNN(pl.LightningModule):
             "leaky_relu": nn.LeakyReLU(True),
         }[nonlinearity]
 
-        channels = [1] + [F] * (n_layers - 1) + [1]
-        self.layers = nn.ModuleList(
-            [
-                gnn.TAGConv(
-                    channels[i],
-                    channels[i + 1],
-                    K,
-                    normalize=False,
-                )
-                for i in range(n_layers)
+        encoder_layers = []
+        for i in range(n_mlp):
+            encoder_layers.append(nn.Linear(1, F) if i == 0 else nn.Linear(F, F))
+            encoder_layers.append(self.nonlinearity)
+
+        decoder_layers = []
+        for i in range(n_mlp):
+            decoder_layers.append(
+                nn.Linear(F, 1) if i == n_mlp - 1 else nn.Linear(F, F)
+            )
+            decoder_layers.append(self.nonlinearity)
+
+        gnn_layers = []
+        for i in range(n_gnn):
+            gnn_layers += [
+                (
+                    gnn.BatchNorm(F) if self.batch_norm else nn.Identity(),
+                    "x -> x",
+                ),
+                (
+                    gnn.TAGConv(
+                        F,
+                        F,
+                        K,
+                        normalize=self.normalize,
+                    ),
+                    "x, edge_index, edge_attr -> x",
+                ),
+                self.nonlinearity if i < n_gnn - 1 else nn.Identity(),
             ]
-        )
+
+        self.encoder = nn.Sequential(*encoder_layers)
+        self.decoder = nn.Sequential(*decoder_layers)
+        self.gnn = gnn.Sequential("x, edge_index, edge_attr", gnn_layers)
 
     def forward(self, data: Data):
-        x = data.x.to(self.dtype).view(-1, 1)
-        edge_attr = data.edge_attr.to(self.dtype)
-        for i, layer in enumerate(self.layers):
-            x = layer(x, data.edge_index, edge_attr)
-            if i < len(self.layers) - 1:
-                x = self.nonlinearity(x)
+        x = data.x.view(-1, 1)
+        x = self.encoder(x)
+        x = self.gnn(x, data.edge_index, data.edge_attr)
+        x = self.decoder(x)
         return x.view(-1, data.num_features)
 
     def training_step(self, data):
@@ -56,10 +88,17 @@ class DeepGNN(pl.LightningModule):
         self.log("train/loss", loss)
         return loss
 
+    @staticmethod
+    def relative_error(x, target, eps=1e-4):
+        error = (x - target).abs()
+        return torch.where(target.abs() < eps, error, error / target.abs())
+
     def validation_step(self, data, *args, **kwargs):
         yhat = self(data)
         loss = F.mse_loss(yhat, data.y)
         self.log("val/loss", loss, prog_bar=True)
+        rel_error = self.relative_error(yhat, data.y).mean()
+        self.log("val/rel_error", rel_error, prog_bar=True)
 
     def test_step(self, data, *args, **kwargs):
         yhat = self(data)
@@ -67,4 +106,4 @@ class DeepGNN(pl.LightningModule):
         self.log("test/loss", loss)
 
     def configure_optimizers(self):
-        return torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
+        return torch.optim.AdamW(self.parameters(), lr=self.lr)
